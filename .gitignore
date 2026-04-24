@@ -21,8 +21,8 @@ logs/
 # API keys — NEVER commit these
 config/settings.py
 
-# Graphify output (regenerated locally)
-graphify-out/
+# Graphify output (pushed for project context)
+# graphify-out/
 
 # OS / Editor
 .DS_Store
