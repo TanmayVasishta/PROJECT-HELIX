@@ -1,0 +1,152 @@
+================================================================================
+HELIX PHASE ROADMAP AND PLANNING
+================================================================================
+
+================================================================================
+OVERALL PHASE ROADMAP STATUS
+================================================================================
+Phase 1 — Environment + Scaffold (Weeks 1-3)    STATUS: COMPLETE
+Phase 2 — Sentinel + ChromaDB (Weeks 4-7)       STATUS: 80% DONE (boot OK, needs test suite)
+Phase 3 — File Middleware + PII tuning (8-10)   STATUS: NOT STARTED
+Phase 4 — Cloud routing + LangChain (11-13)     STATUS: NOT STARTED
+Phase 5 — Voice HUD + async (14-16)             STATUS: SCAFFOLD ONLY
+Phase 6 — Testing + Docs (17-18)                STATUS: NOT STARTED
+
+================================================================================
+DETAILED PHASE PRIORITIES
+================================================================================
+
+PHASE 3 PRIORITIES:
+
+1. REGEX FAST-PATH in file_manager.py
+   - For obvious commands, skip LLM classification entirely
+   - Pattern: if re.match(r"open .+", prompt) → instant route to local
+   - Target: ~0ms for pattern-matched commands vs current 15s
+   - Patterns needed: open, list, move, copy, delete, show, organize, launch
+
+2. NL ACTION PARSER in file_manager.py
+   - Replace the execute() stub with real NL→action dispatcher
+   - Parse: "move [files] from [src] to [dst]"
+   - Parse: "organize my downloads by file type"
+   - Parse: "copy [file] to [folder]"
+   - Parse: "find all PDFs in [folder]"
+   - Use regex + keyword extraction, NOT another LLM call
+
+3. WORKFLOW PROFILES in a new file: core/profiles/profiles.py
+   - "code mode" → open VS Code + Spotify + Chrome (GitHub) + HELIX sidebar
+   - "study mode" → open PDFs + organize notes folder + silence notifications
+   - "presentation mode" → open PowerPoint + hide desktop + mute mic
+   - Profiles stored in ChromaDB, triggered by voice/text command
+   - Profile format: {name: str, actions: [list of file_manager commands]}
+
+4. WATCHDOG CONNECTED TO ROUTER
+   - start_watcher() called at HELIX startup in main.py
+   - Watches: Downloads folder + Desktop
+   - On new file: Sentinel classifies it → suggests organization
+   - Example: "New file detected: resume_final.pdf — move to Documents/Career?"
+
+5. FEW-SHOT PROMPTING for Sentinel accuracy
+   - Add 5-10 examples to INTENT_PROMPT
+   - Format: "Example: 'move my photos' → INTENT: local"
+   - Improves classification from ~80% to ~95%+
+
+6. LOGGING SYSTEM in logs/ folder
+   - Every command + intent + response + timestamp
+   - Every PII detection event
+   - Every cloud vs local routing decision
+   - Format: JSON lines for easy parsing
+
+PHASE 4 PRIORITIES:
+
+7. LANGCHAIN CHAIN for multi-step tasks
+   - "Research quantum computing and save a summary to my documents"
+   - Step 1: Gemini research → Step 2: local file write
+   - Use LangChain SequentialChain or LCEL
+
+8. GMAIL DRAFTING (privacy-safe)
+   - User: "Draft an email to my professor about assignment extension"
+   - Sentinel redacts professor name before Gemini drafts
+   - HELIX returns draft → user reviews → opens Gmail with pre-filled content
+   - Use webbrowser.open() with mailto: URL or Gmail compose URL
+
+PHASE 5 PRIORITIES:
+
+9. WAKE WORD DETECTION
+   - Background thread always listening for "hey helix"
+   - Use: pvporcupine (Picovoice, free tier) or keyword_spotting with Whisper
+   - On wake: activate VoiceListener.listen_once()
+
+10. ANIMATED VOICE HUD
+    - Waveform animation during listening
+    - Typing animation during processing
+    - Color change: green (idle) → yellow (listening) → blue (processing)
+
+================================================================================
+NEW FEATURES TO ADD (Antigravity Scope — Beyond Original Spec)
+================================================================================
+
+FEATURE A: SEMANTIC FILE SEARCH
+   What: "find all files about my Parkinson's project"
+   How: Index all file contents into ChromaDB, semantic search via embeddings
+   Files: new file core/search/semantic_search.py
+   Uses: chromadb + pathlib + PyPDF2 + python-docx for content extraction
+
+FEATURE B: CLIPBOARD INTELLIGENCE
+   What: HELIX monitors clipboard, auto-categorizes copied content
+   How: Background thread reads pyperclip, Sentinel classifies content type
+   Example: Copy a URL → HELIX: "Save this to bookmarks or open now?"
+   Example: Copy a code block → HELIX: "Save to snippets?"
+   Files: new file core/clipboard/monitor.py
+   Uses: pyperclip, threading
+
+FEATURE C: SYSTEM HEALTH MONITOR
+   What: "how's my system doing?" → RAM, CPU, disk, running processes
+   How: psutil library, formatted report
+   Integration: Add to FileManager as execute() case, no LLM needed
+   Uses: psutil (pip install psutil)
+
+FEATURE D: SCREEN CONTEXT AWARENESS
+   What: HELIX can see what's on screen and act on it
+   How: mss screenshot → local vision model (llava via Ollama)
+        "helix what am I looking at?" → describes screen content
+   Files: new file core/vision/screen_reader.py
+   Uses: mss (pip install mss), ollama with llava model
+   Privacy: Screenshot never leaves machine — local vision only
+
+FEATURE E: SMART NOTIFICATION SYSTEM
+   What: HELIX proactively notifies about important events
+   How: Windows toast notifications via win10toast or plyer
+   Triggers: New file in Downloads, Watchdog event, exam calendar date
+   Example: "exam_schedule.pdf detected in Downloads — added to Documents/Exams"
+   Uses: plyer (pip install plyer)
+
+FEATURE F: CONVERSATION HISTORY BROWSER
+   What: "what did I ask you last week?" → shows past interactions
+   How: ChromaDB timestamp metadata + date range query
+   Integration: New command type in file_manager or router
+   Output: Formatted list of past interactions with dates
+
+FEATURE G: MULTI-LANGUAGE SUPPORT
+   What: User can speak/type in Hindi/Kannada, HELIX understands
+   How: Whisper (multilingual model) for STT
+        Translate prompt to English before Sentinel classification
+        Respond in user's language via Gemini
+   Uses: openai-whisper (already installed, use "medium" model for multilingual)
+
+FEATURE H: SCHEDULED TASKS
+   What: "remind me to submit assignment tomorrow at 9am"
+   How: schedule library + Windows Task Scheduler via subprocess
+        Store task in ChromaDB with trigger metadata
+   Uses: schedule (pip install schedule)
+
+FEATURE I: FOCUS MODE / DO NOT DISTURB
+   What: "helix, focus mode for 2 hours"
+   How: Mute notifications, close distracting apps, set timer
+        Open study playlist, block social media via hosts file edit
+   Integration: Workflow profile + system commands
+
+FEATURE J: PROJECT CONTEXT SWITCHING
+   What: "switch to HELIX project" → HELIX loads all context about that project
+   How: ChromaDB collection per project, switch active collection
+        Preloads: recent files, last commands, open tasks
+   This makes HELIX feel like it knows each project intimately

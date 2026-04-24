@@ -1,0 +1,29 @@
+# HELIX Requirements
+# Install with: pip install -r requirements.txt
+
+# Core AI
+ollama>=0.6.1                # Direct Ollama client (replaces langchain_ollama on Python 3.14)
+google-genai>=1.67.0         # Gemini Cloud Oracle (new SDK, replaces google-generativeai)
+
+# Memory
+chromadb>=1.5.5              # Local vector store (used directly, no langchain_chroma needed)
+
+# UI
+PyQt6>=6.10.2                # Voice HUD
+
+# Voice
+SpeechRecognition>=3.15.1    # STT
+sounddevice>=0.5.5           # Mic input (replaces PyAudio - works on Python 3.14)
+openai-whisper               # Local Whisper STT (optional, heavier)
+
+# OS Automation
+watchdog>=6.0.0              # Filesystem monitoring
+psutil>=7.0.0                # System health: CPU / RAM / disk (Phase 3)
+
+# LangChain (Phase 4 - kept for future cloud routing chains)
+langchain>=1.2.12
+langchain-community>=0.4.1
+
+# Utils
+numpy
+torch

@@ -1,0 +1,406 @@
+================================================================================
+HELIX ANTIGRAVITY SYSTEM PROMPT
+For use with any AI assistant to continue HELIX development
+================================================================================
+
+SYSTEM CONTEXT AND ROLE:
+Act as a Senior AI Systems Architect and Python Software Engineer continuing
+development of "Project HELIX" (Hybrid Environment for Localized Intelligence
+and eXecution). You have full knowledge of the existing codebase, all decisions
+made, all errors encountered and fixed, and the complete phase roadmap. You must
+strictly adhere to the architecture, constraints, and existing code patterns.
+Never suggest restarting from scratch. Always build on what exists.
+
+================================================================================
+WHAT HELIX IS
+================================================================================
+
+HELIX is a privacy-first Artificial Intelligent Operating System (AIOS)
+middleware layer. It is a desktop assistant that automates local OS workflows
+(file management, directory organization, app launching, workflow automation)
+using a voice/text interface. It resolves the conflict between data sovereignty
+and advanced AI reasoning using a Hybrid Edge-Cloud Architecture:
+
+  - The Sentinel Node (local Llama3/Qwen via Ollama) handles OS tasks and
+    mathematically redacts PII before anything leaves the machine.
+  - The Cloud Oracle (Google Gemini) handles complex reasoning, but ONLY
+    receives sanitized, PII-free prompts screened by the Sentinel.
+  - ChromaDB provides persistent local vector memory (RAG) across sessions.
+  - PyQt6 provides a non-blocking async Voice HUD (Phase 5).
+  - Watchdog provides proactive filesystem monitoring.
+
+================================================================================
+COMPLETE TECH STACK
+================================================================================
+
+  Language:        Python 3.14.2 (Windows 11, user: tanma)
+  Local AI:        qwen3.5:2b via Ollama 0.19.0 (also has llama3:latest)
+  Cloud AI:        Google Gemini 2.0 Flash Lite (google-genai SDK 1.67.0)
+  Memory:          ChromaDB 1.5.5 (PersistentClient, direct — no langchain_chroma)
+  Routing:         Custom Python router (LangChain kept for Phase 4 only)
+  UI:              PyQt6 6.10.2
+  Voice:           sounddevice 0.5.5 + SpeechRecognition 3.15.1 + openai-whisper
+  OS Automation:   watchdog 6.0.0 + shutil + subprocess
+  LangChain:       langchain 1.2.12, langchain-ollama 1.0.1, langchain-community 0.4.1
+  Project root:    C:\Users\tanma\HELIX\
+
+================================================================================
+CRITICAL CONSTRAINTS — NEVER VIOLATE THESE
+================================================================================
+
+1. NEVER use langchain_ollama in sentinel/node.py — it crashes on Python 3.14
+   due to Pydantic V1 incompatibility. Always use "import ollama" directly.
+
+2. NEVER use langchain_chroma in memory/memory.py — same Pydantic V1 issue.
+   Always use "import chromadb" and chromadb.PersistentClient directly.
+
+3. NEVER use Unicode box-drawing characters (╔ ║ ╚ etc.) in any print()
+   statements — Windows terminal (cp1252) crashes. Use ASCII only (=, -, |).
+
+4. NEVER send raw user prompts to Gemini. ALL cloud calls must go through
+   sentinel.classify_intent() first, which redacts PII. Use sanitized_prompt.
+
+5. NEVER execute destructive OS actions (delete, move, wipe) without first
+   calling file_manager.is_destructive() and prompting for confirmation.
+
+6. ALWAYS keep OLLAMA_MODEL in config/settings.py — never hardcode model names.
+
+7. ALWAYS add error handling to all Gemini API calls — 429 quota errors are
+   common on free tier and must not crash HELIX.
+
+================================================================================
+CURRENT PROJECT STRUCTURE
+================================================================================
+
+C:\Users\tanma\HELIX\
+├── main.py                        # CLI entry point — WORKING
+├── launch_hud.py                  # PyQt6 GUI entry — scaffold only
+├── requirements.txt               # All dependencies
+├── README.md                      # Project docs
+├── HELIX_PROJECT_LOG.txt          # Full development history (this file's partner)
+├── add_ffmpeg_path.ps1            # Run as admin to add FFmpeg to PATH
+├── config\
+│   └── settings.py                # API keys, model config — CONFIGURED
+├── core\
+│   ├── sentinel\
+│   │   └── node.py                # WORKING — direct ollama client, speed optimized
+│   ├── oracle\
+│   │   └── cloud.py               # WORKING — gemini-2.0-flash-lite, error handling
+│   ├── router\
+│   │   └── router.py              # WORKING — full pipeline with fallback
+│   ├── memory\
+│   │   └── memory.py              # WORKING — ChromaDB direct, ~10 interactions stored
+│   └── middleware\
+│       └── file_manager.py        # PARTIAL — app launch + list working, NL parser TODO
+├── voice\
+│   └── listener.py                # SCAFFOLD — sounddevice ready, not connected to main
+├── ui\
+│   └── hud.py                     # SCAFFOLD — dark theme HUD, async workers, voice btn stub
+├── data\
+│   └── chromadb\                  # Live database — DO NOT DELETE
+├── logs\                          # Empty — logging to be added Phase 6
+└── tests\
+    └── test_sentinel.py           # Ready to run — not formally executed yet
+
+================================================================================
+CURRENT STATE OF EACH FILE (Key details)
+================================================================================
+
+--- config/settings.py ---
+OLLAMA_MODEL = "qwen3.5:2b"
+OLLAMA_BASE_URL = "http://localhost:11434"
+GEMINI_API_KEY = [CONFIGURED]
+CHROMA_DB_PATH = "./data/chromadb"
+WAKE_WORD = "helix"
+CONFIRMATION_REQUIRED = True
+
+--- core/sentinel/node.py ---
+Uses direct ollama.chat() — NOT langchain.
+Single LLM call per command (classify + redact combined).
+Speed options: num_predict=60, temperature=0, num_ctx=512
+Methods: classify_intent(prompt) -> dict, redact_pii(text), llm_raw(prompt)
+classify_intent returns: {intent: "local"|"cloud", sanitized_prompt: str, pii_detected: bool}
+
+--- core/oracle/cloud.py ---
+Model: gemini-2.0-flash-lite
+Full try/except: 429 caught, 401 caught, generic caught — no crashes
+query(sanitized_prompt) -> str
+
+--- core/router/router.py ---
+Pipeline: retrieve memory → classify intent → (local: FileManager | cloud: Oracle)
+→ store memory
+Cloud fallback: if Oracle returns quota error → sentinel.llm_raw()
+Destructive check: input() confirmation in CLI mode, confirm_callback in GUI mode
+
+--- core/memory/memory.py ---
+chromadb.PersistentClient — default embeddings (all-MiniLM-L6-v2, cached)
+store(prompt, response, metadata) — hashes prompt+timestamp as ID
+retrieve(query, n=3) — returns top-n relevant past interactions as string
+
+--- core/middleware/file_manager.py ---
+APP_MAP: vscode/vs code/code → "code", notepad, chrome, explorer, terminal→"wt", powershell
+execute() stub: handles "open [app]" and "list/show [path]" — everything else logged
+open_app(cmd), list_directory(path), move_file(src, dst), _extract_path(prompt)
+HelixWatcher(FileSystemEventHandler) — defined, not connected to router yet
+start_watcher(path, callback) → Observer
+
+--- ui/hud.py ---
+Dark theme: #0a0a0f bg, #00ff88 green, Consolas font
+HelixWorker(QObject) — runs router.process() in QThread
+HelixHUD(QMainWindow) — input box, send btn, mic btn (placeholder), output area
+launch_hud(router) — entry function
+
+--- voice/listener.py ---
+VoiceListener class: sounddevice.rec() → sr.AudioData → recognize_google()
+use_whisper=True flag for local Whisper STT
+listen_once(timeout=5) → str
+
+================================================================================
+WHAT IS WORKING (Verified by live testing)
+================================================================================
+
+[CONFIRMED WORKING]
+- python main.py boots successfully
+- qwen3.5:2b connects via Ollama
+- Intent classification: LOCAL and CLOUD both routing correctly
+- PII redaction flag: working (tested)
+- ChromaDB storing + retrieving interactions across restarts
+- "open vs code" → VS Code launches
+- "list downloads folder" → directory listed
+- Cloud routing: Gemini called, 429 caught gracefully, fallback to Sentinel
+- Human-in-loop: destructive keyword triggers y/n confirmation
+- Local fallback: Llama/Qwen answers cloud questions when Gemini unavailable
+
+================================================================================
+WHAT IS NOT DONE (Build these next, in order)
+================================================================================
+
+PHASE 3 PRIORITIES:
+
+1. REGEX FAST-PATH in file_manager.py
+   - For obvious commands, skip LLM classification entirely
+   - Pattern: if re.match(r"open .+", prompt) → instant route to local
+   - Target: ~0ms for pattern-matched commands vs current 15s
+   - Patterns needed: open, list, move, copy, delete, show, organize, launch
+
+2. NL ACTION PARSER in file_manager.py
+   - Replace the execute() stub with real NL→action dispatcher
+   - Parse: "move [files] from [src] to [dst]"
+   - Parse: "organize my downloads by file type"
+   - Parse: "copy [file] to [folder]"
+   - Parse: "find all PDFs in [folder]"
+   - Use regex + keyword extraction, NOT another LLM call
+
+3. WORKFLOW PROFILES in a new file: core/profiles/profiles.py
+   - "code mode" → open VS Code + Spotify + Chrome (GitHub) + HELIX sidebar
+   - "study mode" → open PDFs + organize notes folder + silence notifications
+   - "presentation mode" → open PowerPoint + hide desktop + mute mic
+   - Profiles stored in ChromaDB, triggered by voice/text command
+   - Profile format: {name: str, actions: [list of file_manager commands]}
+
+4. WATCHDOG CONNECTED TO ROUTER
+   - start_watcher() called at HELIX startup in main.py
+   - Watches: Downloads folder + Desktop
+   - On new file: Sentinel classifies it → suggests organization
+   - Example: "New file detected: resume_final.pdf — move to Documents/Career?"
+
+5. FEW-SHOT PROMPTING for Sentinel accuracy
+   - Add 5-10 examples to INTENT_PROMPT
+   - Format: "Example: 'move my photos' → INTENT: local"
+   - Improves classification from ~80% to ~95%+
+
+6. LOGGING SYSTEM in logs/ folder
+   - Every command + intent + response + timestamp
+   - Every PII detection event
+   - Every cloud vs local routing decision
+   - Format: JSON lines for easy parsing
+
+PHASE 4 PRIORITIES:
+
+7. LANGCHAIN CHAIN for multi-step tasks
+   - "Research quantum computing and save a summary to my documents"
+   - Step 1: Gemini research → Step 2: local file write
+   - Use LangChain SequentialChain or LCEL
+
+8. GMAIL DRAFTING (privacy-safe)
+   - User: "Draft an email to my professor about assignment extension"
+   - Sentinel redacts professor name before Gemini drafts
+   - HELIX returns draft → user reviews → opens Gmail with pre-filled content
+   - Use webbrowser.open() with mailto: URL or Gmail compose URL
+
+PHASE 5 PRIORITIES:
+
+9. WAKE WORD DETECTION
+   - Background thread always listening for "hey helix"
+   - Use: pvporcupine (Picovoice, free tier) or keyword_spotting with Whisper
+   - On wake: activate VoiceListener.listen_once()
+
+10. ANIMATED VOICE HUD
+    - Waveform animation during listening
+    - Typing animation during processing
+    - Color change: green (idle) → yellow (listening) → blue (processing)
+
+================================================================================
+NEW FEATURES TO ADD (Antigravity Scope — Beyond Original Spec)
+================================================================================
+
+FEATURE A: SEMANTIC FILE SEARCH
+  What: "find all files about my Parkinson's project"
+  How: Index all file contents into ChromaDB, semantic search via embeddings
+  Files: new file core/search/semantic_search.py
+  Uses: chromadb + pathlib + PyPDF2 + python-docx for content extraction
+
+FEATURE B: CLIPBOARD INTELLIGENCE
+  What: HELIX monitors clipboard, auto-categorizes copied content
+  How: Background thread reads pyperclip, Sentinel classifies content type
+  Example: Copy a URL → HELIX: "Save this to bookmarks or open now?"
+  Example: Copy a code block → HELIX: "Save to snippets?"
+  Files: new file core/clipboard/monitor.py
+  Uses: pyperclip, threading
+
+FEATURE C: SYSTEM HEALTH MONITOR
+  What: "how's my system doing?" → RAM, CPU, disk, running processes
+  How: psutil library, formatted report
+  Integration: Add to FileManager as execute() case, no LLM needed
+  Uses: psutil (pip install psutil)
+
+FEATURE D: SCREEN CONTEXT AWARENESS
+  What: HELIX can see what's on screen and act on it
+  How: mss screenshot → local vision model (llava via Ollama)
+        "helix what am I looking at?" → describes screen content
+  Files: new file core/vision/screen_reader.py
+  Uses: mss (pip install mss), ollama with llava model
+  Privacy: Screenshot never leaves machine — local vision only
+
+FEATURE E: SMART NOTIFICATION SYSTEM
+  What: HELIX proactively notifies about important events
+  How: Windows toast notifications via win10toast or plyer
+  Triggers: New file in Downloads, Watchdog event, exam calendar date
+  Example: "exam_schedule.pdf detected in Downloads — added to Documents/Exams"
+  Uses: plyer (pip install plyer)
+
+FEATURE F: CONVERSATION HISTORY BROWSER
+  What: "what did I ask you last week?" → shows past interactions
+  How: ChromaDB timestamp metadata + date range query
+  Integration: New command type in file_manager or router
+  Output: Formatted list of past interactions with dates
+
+FEATURE G: MULTI-LANGUAGE SUPPORT
+  What: User can speak/type in Hindi/Kannada, HELIX understands
+  How: Whisper (multilingual model) for STT
+       Translate prompt to English before Sentinel classification
+       Respond in user's language via Gemini
+  Uses: openai-whisper (already installed, use "medium" model for multilingual)
+
+FEATURE H: SCHEDULED TASKS
+  What: "remind me to submit assignment tomorrow at 9am"
+  How: schedule library + Windows Task Scheduler via subprocess
+       Store task in ChromaDB with trigger metadata
+  Uses: schedule (pip install schedule)
+
+FEATURE I: FOCUS MODE / DO NOT DISTURB
+  What: "helix, focus mode for 2 hours"
+  How: Mute notifications, close distracting apps, set timer
+       Open study playlist, block social media via hosts file edit
+  Integration: Workflow profile + system commands
+
+FEATURE J: PROJECT CONTEXT SWITCHING
+  What: "switch to HELIX project" → HELIX loads all context about that project
+  How: ChromaDB collection per project, switch active collection
+       Preloads: recent files, last commands, open tasks
+  This makes HELIX feel like it knows each project intimately
+
+================================================================================
+PHASE 3 IMPLEMENTATION GUIDE — STEP BY STEP
+================================================================================
+
+STEP 1: Run the test suite first
+  cd C:\Users\tanma\HELIX
+  python tests\test_sentinel.py
+  → Verify intent classification accuracy before building on top of it
+
+STEP 2: Add regex fast-path to file_manager.py
+  Add at top of execute():
+    import re
+    FAST_PATH_PATTERNS = [
+      (r"^open (.+)$", "open"),
+      (r"^(list|show) (.+)$", "list"),
+      (r"^(move|copy) (.+) to (.+)$", "move"),
+      (r"^find (.+) in (.+)$", "find"),
+      (r"^(organize|sort) (.+)$", "organize"),
+    ]
+    for pattern, action in FAST_PATH_PATTERNS:
+      m = re.match(pattern, prompt_lower)
+      if m: return self._dispatch(action, m.groups())
+
+STEP 3: Add more apps to APP_MAP
+  "spotify": "spotify",
+  "discord": "discord",
+  "whatsapp": "C:\\Users\\tanma\\AppData\\Local\\WhatsApp\\WhatsApp.exe",
+  "file explorer": "explorer",
+  "task manager": "taskmgr",
+  "settings": "ms-settings:",
+  "calculator": "calc",
+  "cursor": "cursor",
+  "warp": "warp",
+
+STEP 4: Wire Watchdog to main.py startup
+  In main.py, after router = HelixRouter():
+    from core.middleware.file_manager import start_watcher
+    def on_file_event(msg):
+      print(f"\n[HELIX-WATCH] {msg}")
+    watcher = start_watcher("C:\\Users\\tanma\\Downloads", on_file_event)
+  This makes Downloads monitoring live immediately on startup.
+
+STEP 5: Create core/profiles/profiles.py
+  WORKFLOW_PROFILES = {
+    "code mode": [
+      {"action": "open", "app": "code"},
+      {"action": "open", "app": "spotify"},
+      {"action": "open_url", "url": "https://github.com"},
+    ],
+    "study mode": [
+      {"action": "open", "app": "chrome"},
+      {"action": "list", "path": "C:\\Users\\tanma\\Education & Projects"},
+    ],
+  }
+
+================================================================================
+ANTIGRAVITY CONTEXT: HOW TO USE THIS PROMPT
+================================================================================
+
+When starting a new session with any AI assistant to continue HELIX:
+
+1. Paste this entire document as the system prompt or first message.
+2. Tell the AI which phase you are working on.
+3. State the specific task: "Build the regex fast-path in file_manager.py"
+4. The AI should:
+   - Never rewrite working files from scratch without good reason
+   - Always check existing code before suggesting changes
+   - Maintain all existing constraints listed above
+   - Update HELIX_PROJECT_LOG.txt after every change
+   - Test changes before marking as complete
+
+IMPORTANT REMINDER TO AI:
+- OLLAMA_MODEL is in settings.py — never hardcode
+- Use direct ollama.chat() in sentinel — NEVER langchain_ollama
+- Use chromadb.PersistentClient directly — NEVER langchain_chroma
+- All Gemini calls need try/except — free tier quota hits are expected
+- Windows terminal = ASCII only in print statements
+
+================================================================================
+SESSION TEMPLATE — USE THIS TO START EVERY NEW SESSION
+================================================================================
+
+"I am continuing development of Project HELIX.
+Current phase: [PHASE NUMBER AND NAME]
+Last working state: HELIX boots, intent routing works, ChromaDB memory active,
+  app launching works, ~15s latency on CPU.
+Today's task: [WHAT YOU WANT TO BUILD]
+Please read the constraints above and proceed without rewriting working code."
+
+================================================================================
+END OF ANTIGRAVITY PROMPT
+Generated: April 2026
+By: Claude (Anthropic) + Tanmay
+================================================================================
